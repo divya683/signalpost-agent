@@ -65,12 +65,22 @@ def run_query(orgs: list[str]) -> list[dict]:
         return json.loads(response.read())["results"]["bindings"]
 
 
-def to_observations(binding: dict, retrieved_at: str) -> list[dict]:
-    org = binding["orgnr"]["value"]
-    item_url = binding["item"]["value"]
+def to_observations(bindings_for_org: list[dict], retrieved_at: str) -> list[dict]:
+    """Build observations for one org from ALL its bindings.
+
+    Multiple parallel OPTIONALs in the SPARQL query produce a cross-product row
+    per combination of multi-valued properties (e.g. two Facebook links, three
+    YouTube links -> 6 rows), not one row per company. We must union each
+    property's distinct values across all bindings for the org, not treat each
+    binding as an independent company match -- otherwise a multi-valued property
+    both duplicates the profile observation and silently drops sibling values.
+    """
+    first = bindings_for_org[0]
+    org = first["orgnr"]["value"]
+    item_url = first["item"]["value"]
     item_id = item_url.rsplit("/", 1)[-1]
-    label = binding.get("itemLabel", {}).get("value", "")
-    digest = hashlib.sha256(json.dumps(binding, sort_keys=True).encode()).hexdigest()
+    label = first.get("itemLabel", {}).get("value", "")
+    digest = hashlib.sha256(json.dumps(bindings_for_org, sort_keys=True).encode()).hexdigest()
     common = {
         "organisation_number": org,
         "platform": "wikidata",
@@ -92,18 +102,21 @@ def to_observations(binding: dict, retrieved_at: str) -> list[dict]:
         "label": label,
     }]
     for i, (prop, (platform, signal_type)) in enumerate(LINK_PROPERTIES.items()):
-        value = binding.get(f"{platform}_{i}", {}).get("value")
-        if not value:
-            continue
-        observations.append({
-            **common,
-            "id": f"wikidata-link-{org}-{prop}-{hashlib.sha256(value.encode()).hexdigest()[:12]}",
-            "platform": platform,
-            "signal_type": signal_type,
-            "source_url": value if value.startswith("http") else item_url,
-            "evidence_span": f"Wikidata {prop} claim on {label}",
-            "declared_value": value,
-        })
+        values = {
+            binding[f"{platform}_{i}"]["value"]
+            for binding in bindings_for_org
+            if binding.get(f"{platform}_{i}", {}).get("value")
+        }
+        for value in sorted(values):
+            observations.append({
+                **common,
+                "id": f"wikidata-link-{org}-{prop}-{hashlib.sha256(value.encode()).hexdigest()[:12]}",
+                "platform": platform,
+                "signal_type": signal_type,
+                "source_url": value if value.startswith("http") else item_url,
+                "evidence_span": f"Wikidata {prop} claim on {label}",
+                "declared_value": value,
+            })
     return observations
 
 
@@ -130,10 +143,12 @@ def main() -> None:
         retrieved_at = utc_now()
         try:
             bindings = run_query(batch)
+            by_org: dict[str, list[dict]] = {}
             for binding in bindings:
-                observations = to_observations(binding, retrieved_at)
-                all_observations.extend(observations)
-                matched_orgs.add(binding["orgnr"]["value"])
+                by_org.setdefault(binding["orgnr"]["value"], []).append(binding)
+            for org, org_bindings in by_org.items():
+                all_observations.extend(to_observations(org_bindings, retrieved_at))
+                matched_orgs.add(org)
         except Exception as exc:
             errors.append({"batch": index, "error": f"{type(exc).__name__}: {str(exc)[:200]}"})
         print(f"  batch {index}/{len(batches)}: {len(matched_orgs)} matched so far", end="\r")
