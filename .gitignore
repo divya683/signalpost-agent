@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+out/
+
+# large downloaded datasets - do not commit
+brreg-enheter.csv
+signalpost-universe.jsonl.gz
+*.jsonl.gz
+entry-companies.jsonl
+smoke-companies.jsonl
+
+.DS_Store
