@@ -8,6 +8,7 @@ out/
 brreg-enheter.csv
 signalpost-universe.jsonl.gz
 *.jsonl.gz
+*.csv.gz
 entry-companies.jsonl
 smoke-companies.jsonl
 
