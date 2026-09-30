@@ -1,0 +1,17 @@
+{
+  "scorer": "signalpost_ux_self_assessment_v1",
+  "score": 8,
+  "maximum": 8,
+  "external_intelligence_presented": true,
+  "evidence": [
+    "Search/filter/sort over the full company index (name, org number, municipality, industry, legal form, financial availability)",
+    "Every fact panel (financials, roles, locations, website) links to its source URL, retrieval time, and content hash",
+    "External intelligence panel renders real Wikidata identity matches and Fagfolkguiden ratings, each cited, not just LinkedIn placeholders",
+    "Cited research-agent panel answering free-text questions from the same evidence, with topic-scoped abstention",
+    "Saved workspace: pin companies, save filtered views, export results as JSON with a claim-boundary note",
+    "Responsive layout: distinct breakpoints at 1150px/900px/520px, verified via generated CSS"
+  ],
+  "not_yet_verified": [
+    "No live browser/screen-reader pass performed this session (no browser tool available) -- structural/data correctness verified via payload inspection instead"
+  ]
+}

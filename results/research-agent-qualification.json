@@ -1,0 +1,59 @@
+{
+  "corpus": "frozen extension-250 research-agent suite v1",
+  "profiles": 6,
+  "questions": 4,
+  "single_company_supported": true,
+  "screen_results": [
+    {
+      "query": "companies in Oslo with more than 5 employees and revenue over 1 million top 10 by revenue",
+      "expected": [
+        "939318453",
+        "916201796",
+        "928230937"
+      ],
+      "actual": [
+        "939318453",
+        "916201796",
+        "928230937"
+      ],
+      "exact_membership_and_order": true,
+      "exact_plan": true,
+      "citations_complete": true
+    },
+    {
+      "query": "top 5 by revenue",
+      "expected": [
+        "939318453",
+        "928084825",
+        "916201796",
+        "882718662",
+        "916437110"
+      ],
+      "actual": [
+        "939318453",
+        "928084825",
+        "916201796",
+        "882718662",
+        "916437110"
+      ],
+      "exact_membership_and_order": true,
+      "exact_plan": true,
+      "citations_complete": true
+    }
+  ],
+  "unsupported_abstention": true,
+  "saved_work": true,
+  "provenance_export": true,
+  "points": {
+    "cited_single_company_qa": 4,
+    "cross_company_screening": 3.0,
+    "exact_inspectable_filters": 2.0,
+    "unsupported_abstention": 1,
+    "saved_history": 1,
+    "provenance_export": 1
+  },
+  "score": 12.0,
+  "maximum": 12,
+  "qualification_passed": true,
+  "external_footprint_qa_passed": true
+}

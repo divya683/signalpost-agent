@@ -1,0 +1,438 @@
+{
+  "corpus": "frozen 50-question Signalpost research suite v2",
+  "base_suite": null,
+  "profiles_available": 36,
+  "qa_cases_total": 10,
+  "qa_cases_evaluated": 10,
+  "qa_cases_missing_profile": [],
+  "qa_pass_rate": 1.0,
+  "qa_results": [
+    {
+      "id": "qa01",
+      "organisation_number": "966833300",
+      "facts_found": 30,
+      "minimum_facts": 12,
+      "enough_facts": true,
+      "all_cited": true,
+      "required_claims": [
+        "Registered subunit",
+        "Reporting period",
+        "Revenue"
+      ],
+      "missing_claims": [],
+      "passed": true
+    },
+    {
+      "id": "qa02",
+      "organisation_number": "886581432",
+      "facts_found": 18,
+      "minimum_facts": 10,
+      "enough_facts": true,
+      "all_cited": true,
+      "required_claims": [
+        "Annual result",
+        "Operating result",
+        "Registered subunit"
+      ],
+      "missing_claims": [],
+      "passed": true
+    },
+    {
+      "id": "qa03",
+      "organisation_number": "913084705",
+      "facts_found": 30,
+      "minimum_facts": 12,
+      "enough_facts": true,
+      "all_cited": true,
+      "required_claims": [
+        "Registered subunit",
+        "Revenue"
+      ],
+      "missing_claims": [],
+      "passed": true
+    },
+    {
+      "id": "qa04",
+      "organisation_number": "938702675",
+      "facts_found": 24,
+      "minimum_facts": 10,
+      "enough_facts": true,
+      "all_cited": true,
+      "required_claims": [
+        "Operating result",
+        "Registered subunit",
+        "Revenue"
+      ],
+      "missing_claims": [],
+      "passed": true
+    },
+    {
+      "id": "qa05",
+      "organisation_number": "935416779",
+      "facts_found": 30,
+      "minimum_facts": 12,
+      "enough_facts": true,
+      "all_cited": true,
+      "required_claims": [
+        "Debt",
+        "Registered subunit",
+        "Reporting period"
+      ],
+      "missing_claims": [],
+      "passed": true
+    },
+    {
+      "id": "qa06",
+      "organisation_number": "943672520",
+      "facts_found": 30,
+      "minimum_facts": 10,
+      "enough_facts": true,
+      "all_cited": true,
+      "required_claims": [
+        "Annual result",
+        "Registered subunit",
+        "Revenue"
+      ],
+      "missing_claims": [],
+      "passed": true
+    },
+    {
+      "id": "qa07",
+      "organisation_number": "920237126",
+      "facts_found": 21,
+      "minimum_facts": 10,
+      "enough_facts": true,
+      "all_cited": true,
+      "required_claims": [
+        "Assets",
+        "Registered subunit",
+        "Revenue"
+      ],
+      "missing_claims": [],
+      "passed": true
+    },
+    {
+      "id": "qa08",
+      "organisation_number": "812206222",
+      "facts_found": 19,
+      "minimum_facts": 10,
+      "enough_facts": true,
+      "all_cited": true,
+      "required_claims": [
+        "Registered subunit",
+        "Reporting period",
+        "Revenue"
+      ],
+      "missing_claims": [],
+      "passed": true
+    },
+    {
+      "id": "qa09",
+      "organisation_number": "837895502",
+      "facts_found": 27,
+      "minimum_facts": 10,
+      "enough_facts": true,
+      "all_cited": true,
+      "required_claims": [
+        "Debt",
+        "Registered subunit",
+        "Revenue"
+      ],
+      "missing_claims": [],
+      "passed": true
+    },
+    {
+      "id": "qa10",
+      "organisation_number": "999296432",
+      "facts_found": 26,
+      "minimum_facts": 10,
+      "enough_facts": true,
+      "all_cited": true,
+      "required_claims": [
+        "Operating result",
+        "Registered subunit",
+        "Revenue"
+      ],
+      "missing_claims": [],
+      "passed": true
+    }
+  ],
+  "screen_cases_total": 29,
+  "screen_pass_rate": 1.0,
+  "screen_results": [
+    {
+      "id": "s01",
+      "query": "companies in Oslo with more than 5 employees",
+      "filters_match": true,
+      "sort_match": true,
+      "passed": true
+    },
+    {
+      "id": "s02",
+      "query": "companies in Bergen with at least 10 employees",
+      "filters_match": true,
+      "sort_match": true,
+      "passed": true
+    },
+    {
+      "id": "s03",
+      "query": "companies in Oslo with fewer than 20 employees",
+      "filters_match": true,
+      "sort_match": true,
+      "passed": true
+    },
+    {
+      "id": "s04",
+      "query": "legal form is AS",
+      "filters_match": true,
+      "sort_match": true,
+      "passed": true
+    },
+    {
+      "id": "s05",
+      "query": "organisation form = ASA",
+      "filters_match": true,
+      "sort_match": true,
+      "passed": true
+    },
+    {
+      "id": "s06",
+      "query": "legal form ENK",
+      "filters_match": true,
+      "sort_match": true,
+      "passed": true
+    },
+    {
+      "id": "s07",
+      "query": "companies with over 50 employees",
+      "filters_match": true,
+      "sort_match": true,
+      "passed": true
+    },
+    {
+      "id": "s08",
+      "query": "companies with employees >= 25",
+      "filters_match": true,
+      "sort_match": true,
+      "passed": true
+    },
+    {
+      "id": "s09",
+      "query": "companies with at most 50 employees",
+      "filters_match": true,
+      "sort_match": true,
+      "passed": true
+    },
+    {
+      "id": "s10",
+      "query": "companies with revenue over 10 million",
+      "filters_match": true,
+      "sort_match": true,
+      "passed": true
+    },
+    {
+      "id": "s11",
+      "query": "companies with revenue at least NOK 100 million",
+      "filters_match": true,
+      "sort_match": true,
+      "passed": true
+    },
+    {
+      "id": "s12",
+      "query": "companies with revenue under 5 million",
+      "filters_match": true,
+      "sort_match": true,
+      "passed": true
+    },
+    {
+      "id": "s13",
+      "query": "profitable companies",
+      "filters_match": true,
+      "sort_match": true,
+      "passed": true
+    },
+    {
+      "id": "s14",
+      "query": "unprofitable companies",
+      "filters_match": true,
+      "sort_match": true,
+      "passed": true
+    },
+    {
+      "id": "s15",
+      "query": "companies with an official website",
+      "filters_match": true,
+      "sort_match": true,
+      "passed": true
+    },
+    {
+      "id": "s17",
+      "query": "companies with annual accounts",
+      "filters_match": true,
+      "sort_match": true,
+      "passed": true
+    },
+    {
+      "id": "s18",
+      "query": "industry contains 'restaurant'",
+      "filters_match": true,
+      "sort_match": true,
+      "passed": true
+    },
+    {
+      "id": "s19",
+      "query": "industry contains 'eiendom'",
+      "filters_match": true,
+      "sort_match": true,
+      "passed": true
+    },
+    {
+      "id": "s20",
+      "query": "top 10 by revenue",
+      "filters_match": true,
+      "sort_match": true,
+      "passed": true
+    },
+    {
+      "id": "s21",
+      "query": "top 15 by employees",
+      "filters_match": true,
+      "sort_match": true,
+      "passed": true
+    },
+    {
+      "id": "s22",
+      "query": "companies in Oslo with revenue over 1 million top 10 by revenue",
+      "filters_match": true,
+      "sort_match": true,
+      "passed": true
+    },
+    {
+      "id": "s23",
+      "query": "companies in Bergen with more than 2 employees top 5 by employees",
+      "filters_match": true,
+      "sort_match": true,
+      "passed": true
+    },
+    {
+      "id": "s24",
+      "query": "legal form AS with annual accounts",
+      "filters_match": true,
+      "sort_match": true,
+      "passed": true
+    },
+    {
+      "id": "s25",
+      "query": "companies in Oslo with an official website",
+      "filters_match": true,
+      "sort_match": true,
+      "passed": true
+    },
+    {
+      "id": "s26",
+      "query": "profitable companies top 10 by revenue",
+      "filters_match": true,
+      "sort_match": true,
+      "passed": true
+    },
+    {
+      "id": "s27",
+      "query": "unprofitable companies top 10 by revenue",
+      "filters_match": true,
+      "sort_match": true,
+      "passed": true
+    },
+    {
+      "id": "s28",
+      "query": "legal form ASA top 5 by employees",
+      "filters_match": true,
+      "sort_match": true,
+      "passed": true
+    },
+    {
+      "id": "s29",
+      "query": "companies in Trondheim with annual accounts",
+      "filters_match": true,
+      "sort_match": true,
+      "passed": true
+    },
+    {
+      "id": "s30",
+      "query": "companies with more than 100 employees and revenue over 100 million top 10 by revenue",
+      "filters_match": true,
+      "sort_match": true,
+      "passed": true
+    }
+  ],
+  "unsupported_total": 11,
+  "unsupported_pass_rate": 1.0,
+  "unsupported_results": [
+    {
+      "id": "u01",
+      "query": "companies with positive Glassdoor sentiment",
+      "abstained": true,
+      "passed": true
+    },
+    {
+      "id": "u02",
+      "query": "companies growing fastest on LinkedIn",
+      "abstained": true,
+      "passed": true
+    },
+    {
+      "id": "u03",
+      "query": "companies with the most website traffic",
+      "abstained": true,
+      "passed": true
+    },
+    {
+      "id": "u04",
+      "query": "companies with the best reviews",
+      "abstained": true,
+      "passed": true
+    },
+    {
+      "id": "u05",
+      "query": "companies with strong social buzz",
+      "abstained": true,
+      "passed": true
+    },
+    {
+      "id": "u06",
+      "query": "companies with positive sentiment",
+      "abstained": true,
+      "passed": true
+    },
+    {
+      "id": "u07",
+      "query": "companies with declining LinkedIn headcount",
+      "abstained": true,
+      "passed": true
+    },
+    {
+      "id": "u08",
+      "query": "companies with negative Glassdoor reviews",
+      "abstained": true,
+      "passed": true
+    },
+    {
+      "id": "u09",
+      "query": "companies with rising traffic",
+      "abstained": true,
+      "passed": true
+    },
+    {
+      "id": "u10",
+      "query": "companies with viral social buzz",
+      "abstained": true,
+      "passed": true
+    },
+    {
+      "id": "u11",
+      "query": "companies without a website",
+      "abstained": true,
+      "passed": true
+    }
+  ],
+  "all_passed": true
+}
