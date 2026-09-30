@@ -2,6 +2,8 @@
 
 This is a runnable starting point for the Signalpost company-research challenge. It is intentionally a solid baseline, not a winning submission.
 
+**Live demo**: https://divya683.github.io/signalpost-agent/ — searchable index of 1,097 real companies with sourced evidence and a cited research-agent panel. See `SUBMISSION.md` for declarations and `results/` for verified run reports.
+
 The public universe contains 411,160 eligible companies. Run the starter on 100 companies before submitting. Larger local tests, including 1,000 or more companies, are encouraged but their precomputed profiles are not submitted or scored.
 
 ## What it already does

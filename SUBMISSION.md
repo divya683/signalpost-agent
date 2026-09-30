@@ -1,5 +1,7 @@
 # Submission declarations
 
+**Live demo**: https://divya683.github.io/signalpost-agent/
+
 Required by the challenge's submission contract: declared models, APIs,
 licences, source-rights assumptions, and expected cost.
 
