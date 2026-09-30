@@ -91,6 +91,7 @@ def to_observations(bindings_for_org: list[dict], retrieved_at: str) -> list[dic
         "acquisition_mode": "official_api",
         "rights_status": "approved",
         "source_class": "official_public_dataset",
+        "wikidata_id": item_id,
     }
     observations = [{
         **common,
