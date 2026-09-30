@@ -15,12 +15,12 @@ to their source; no generative synthesis step exists yet.
 
 | Source | Used for | Licence / rights basis |
 |---|---|---|
-| Brønnøysundregistrene (`data.brreg.no`) — live entity, roles, subunit, financial-accounts endpoints | Official identity, financials, roles, locations | NLOD 2.0 (official Norwegian open government licence) |
-| Wikidata Query Service (`query.wikidata.org/sparql`) | External identity confirmation + linked social/website handles, matched via property P2333 (Norwegian organisation number) | CC0. Query Service is Wikidata's own official public API for this data. |
-| Fagfolkguiden (`fagfolkguiden.no/bedrift/...`) | Aggregate customer-rating display (rating value + review count only, never review text) | Public pages, `robots.txt` explicitly allows `/bedrift/`; rating is read from `schema.org aggregateRating` structured markup, a standard meant for automated consumption. Documented judgement call, not an organiser- or vendor-confirmed rights grant — see `results/README.md` and the commit history on `scripts/run_fagfolkguiden_reviews_connector.py` for the full reasoning. |
+| Brønnøysundregistrene (`data.brreg.no`): live entity, roles, subunit, financial-accounts endpoints | Official identity, financials, roles, locations | NLOD 2.0 (official Norwegian open government licence) |
+| Wikidata Query Service (`query.wikidata.org/sparql`) | External identity confirmation plus linked social/website handles, matched via property P2333 (Norwegian organisation number) | CC0. Query Service is Wikidata's own official public API for this data. |
+| Fagfolkguiden (`fagfolkguiden.no/bedrift/...`) | Aggregate customer-rating display (rating value and review count only, never review text) | Public pages; `robots.txt` explicitly allows `/bedrift/`. Rating is read from `schema.org aggregateRating` structured markup, a standard meant for automated consumption. Documented judgement call, not an organiser- or vendor-confirmed rights grant. See `results/README.md` and the commit history on `scripts/run_fagfolkguiden_reviews_connector.py` for the full reasoning. |
 
 **Explicitly not used**: LinkedIn, Glassdoor, Indeed, or any other prohibited
-platform (enforced programmatically — see `scripts/check_connector_policy.py`
+platform (enforced programmatically; see `scripts/check_connector_policy.py`
 and `results/external-footprint-qualification.json`, 0 violations across 796
 observations).
 
@@ -45,7 +45,7 @@ uv run python scripts/run_competition_batch.py \
 ```
 
 If the national bulk CSV download is unreliable (it was, repeatedly, on this
-network — see commit `4f3d5c1`), substitute:
+network; see commit `4f3d5c1`), substitute:
 
 ```bash
 python3 scripts/build_local_bulk_csv.py --organisations smoke-companies.jsonl --output brreg-enheter.csv.gz
@@ -56,8 +56,8 @@ python3 scripts/build_local_bulk_csv.py --organisations smoke-companies.jsonl --
 
 `OUTPUT_CONTRACT.md` documents a minimal envelope shape (`organisation_number`,
 `run{}`, `claims[]`, `evidence[]`, `changes[]`, `errors[]`, `operations{}`).
-Our actual emitted envelopes — produced by the organiser's own
-`scripts/run_competition_batch.py`, unmodified in this respect — use a
+Our actual emitted envelopes, produced by the organiser's own
+`scripts/run_competition_batch.py` and unmodified in this respect, use a
 different top-level shape (`run_id`, `organisation_number`, `state`,
 `started_at`, `completed_at`, `modules{}`, `profile{}`). We have not changed
 this, since it's the reference implementation's own output and rewriting it
@@ -68,7 +68,7 @@ guessing.
 ## What's verified vs. what's a local proxy
 
 See `results/README.md` for the full breakdown and reproduction steps.
-Headline: `results/composite-score.json` — run via the organiser's own
-`scripts/score_competition_v3.py` — shows `qualification_passed: true`,
+Headline: `results/composite-score.json`, run via the organiser's own
+`scripts/score_competition_v3.py`, shows `qualification_passed: true` and
 `awardable_score: 57.159/100` on our own 1,097-company frozen corpus. This is
 an optimization proxy, not the organiser's hidden official score.

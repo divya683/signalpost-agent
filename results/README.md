@@ -2,7 +2,7 @@
 
 Verified outputs from this submission, committed so they're inspectable without
 re-running anything. Every file here was produced by a script in `scripts/`
-against real, live data — none of it is hand-written or simulated.
+against real, live data. None of it is hand-written or simulated.
 
 | File | Produced by | What it proves |
 |---|---|---|
@@ -19,7 +19,7 @@ against real, live data — none of it is hand-written or simulated.
 
 Everything here runs against a **1,097-company stratified frozen corpus**
 (`scripts/build_frozen_validation_corpus.py`, seed `20260929`), not the smaller
-100-company smoke batch — the smoke-test files are the exception, sized to the
+100-company smoke batch. The smoke-test files are the exception, sized to the
 required smoke-test scale specifically.
 
 ```bash
