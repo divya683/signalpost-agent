@@ -12,7 +12,7 @@
   "details": {
     "external": {
       "verified_external_identity": 10.0,
-      "multi_source_breadth": 1.841,
+      "multi_source_breadth": 1.923,
       "workforce_and_jobs": 0.0,
       "ratings_and_reviews": 0.263,
       "buzz_and_engagement": 0.23,
@@ -34,13 +34,13 @@
     }
   },
   "category_scores": {
-    "external_footprint_intelligence": 12.334,
+    "external_footprint_intelligence": 12.416,
     "official_company_foundation": 14.825,
     "research_agent": 10.0,
     "daily_extensibility_refresh": 12.0,
     "product_ux_design": 8.0
   },
-  "raw_score": 57.159,
+  "raw_score": 57.241,
   "target": 65.0,
   "target_met": false,
   "qualification_gates": {
@@ -53,6 +53,6 @@
     "refresh_replay": true
   },
   "qualification_passed": true,
-  "awardable_score": 57.159,
+  "awardable_score": 57.241,
   "unproven_or_failed": []
 }

@@ -26,6 +26,7 @@ PLATFORMS = {
     "wikidata",
     "wikipedia",
     "company_directory",
+    "dibk",
 }
 
 SIGNAL_TYPES = {
@@ -40,6 +41,7 @@ SIGNAL_TYPES = {
     "public_post",
     "public_mention",
     "buzz_metrics",
+    "credential",
 }
 
 # “Experimental” means the connector can be benchmarked locally, but its output cannot be

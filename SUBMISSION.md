@@ -18,10 +18,11 @@ to their source; no generative synthesis step exists yet.
 | Brønnøysundregistrene (`data.brreg.no`): live entity, roles, subunit, financial-accounts endpoints | Official identity, financials, roles, locations | NLOD 2.0 (official Norwegian open government licence) |
 | Wikidata Query Service (`query.wikidata.org/sparql`) | External identity confirmation plus linked social/website handles, matched via property P2333 (Norwegian organisation number) | CC0. Query Service is Wikidata's own official public API for this data. |
 | Fagfolkguiden (`fagfolkguiden.no/bedrift/...`) | Aggregate customer-rating display (rating value and review count only, never review text) | Public pages; `robots.txt` explicitly allows `/bedrift/`. Rating is read from `schema.org aggregateRating` structured markup, a standard meant for automated consumption. Documented judgement call, not an organiser- or vendor-confirmed rights grant. See `results/README.md` and the commit history on `scripts/run_fagfolkguiden_reviews_connector.py` for the full reasoning. |
+| DIBK Sentral Godkjenning register (`sgregister.dibk.no/api`) | Construction-industry central-approval credential status (approved/not, validity period, approval areas) | Official Norwegian Building Authority API, named directly in the challenge's own permitted-sources list. Open `robots.txt`, no signup, no API key. |
 
 **Explicitly not used**: LinkedIn, Glassdoor, Indeed, or any other prohibited
 platform (enforced programmatically; see `scripts/check_connector_policy.py`
-and `results/external-footprint-qualification.json`, 0 violations across 796
+and `results/external-footprint-qualification.json`, 0 violations across 828
 observations).
 
 ## Expected cost per 100-company run
@@ -70,5 +71,5 @@ guessing.
 See `results/README.md` for the full breakdown and reproduction steps.
 Headline: `results/composite-score.json`, run via the organiser's own
 `scripts/score_competition_v3.py`, shows `qualification_passed: true` and
-`awardable_score: 57.159/100` on our own 1,097-company frozen corpus. This is
+`awardable_score: 57.241/100` on our own 1,097-company frozen corpus. This is
 an optimization proxy, not the organiser's hidden official score.

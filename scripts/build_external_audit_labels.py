@@ -59,6 +59,22 @@ def verify_wikidata_item(item_url: str, expected_org: str, retries: int = 4) -> 
     return None
 
 
+def verify_dibk_record(org: str, claimed_approved: bool, claimed_period_to: str | None, retries: int = 4) -> bool | None:
+    url = f"https://sgregister.dibk.no/api/enterprises/{org}.json"
+    request = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "application/vnd.sgpub.v1"})
+    for attempt in range(retries):
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                record = json.loads(response.read())
+            status = record.get("status") or {}
+            return bool(status.get("approved")) == claimed_approved and status.get("approval_period_to") == claimed_period_to
+        except Exception:
+            if attempt == retries - 1:
+                return None
+            time.sleep(2 * (attempt + 1))
+    return None
+
+
 def verify_fagfolk_page(cache_path: Path, expected_name: str, expected_org: str, claimed_rating: float, claimed_count: int) -> tuple[bool, bool]:
     if not cache_path.exists():
         return False, False
@@ -116,6 +132,19 @@ def main() -> None:
             if not exact_entity:
                 mismatched.append(obs["id"])
             labels.append({"id": obs["id"], "exact_entity": bool(exact_entity), "metric_correct": True})
+
+        elif obs["platform"] == "dibk":
+            # Lookup is by exact org number directly, so there is no identity-matching
+            # question to re-derive (unlike wikidata/fagfolk) -- exact_entity is true by
+            # construction. The independent value here is re-fetching fresh and confirming
+            # the claimed approval status/period still matches, not trusting the first read.
+            metric_ok = verify_dibk_record(org, bool(obs.get("approved")), obs.get("approval_period_to"))
+            time.sleep(args.wikidata_delay)
+            if metric_ok is None:
+                unverifiable.append(obs["id"])
+                continue
+            checked += 1
+            labels.append({"id": obs["id"], "exact_entity": True, "metric_correct": metric_ok})
 
         elif obs["platform"] == "company_directory":
             profile = profiles_by_org.get(org, {})

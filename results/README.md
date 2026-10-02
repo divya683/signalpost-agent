@@ -8,12 +8,12 @@ against real, live data. None of it is hand-written or simulated.
 |---|---|---|
 | `smoke-report.json` / `smoke-envelopes.jsonl` | `scripts/run_competition_batch.py` | Required 100-company smoke test: 100/100 terminal envelopes, all validation gates passed |
 | `refresh-demo.json` | `scripts/run_refresh_replay.py` | Deterministic refresh replay on the bundled fixture: 2/2 expected changes found, 0 false changes, idempotent rerun |
-| `external-footprint-qualification.json` | `scripts/evaluate_external_footprint.py` + `scripts/check_connector_policy.py` | External-footprint qualification: **passed**. 784 independently-audited observations, 0 wrong-entity publications, entity/metric precision 1.0, 0 connector-policy violations |
+| `external-footprint-qualification.json` | `scripts/evaluate_external_footprint.py` + `scripts/check_connector_policy.py` | External-footprint qualification: **passed**. 828 independently-audited observations across 8 platforms (Wikidata, Fagfolkguiden, DIBK, plus linked social handles), 0 wrong-entity publications, entity/metric precision 1.0, 0 connector-policy violations |
 | `research-agent-qualification.json` | `scripts/evaluate_research_agent.py` | Base research-agent suite: 12/12, qualification passed |
 | `research-suite-v2.json` / `research-suite-v3.json` | `scripts/evaluate_research_suite_v2.py` | Richer 50-question and 40-question suites (QA + screening + abstention): 100% pass rate on both |
 | `ux-report.json` | Self-assessment against the shipped prototype | UX feature inventory and score |
 | `full-scale-batch-report.json` / `full-scale-resume-report.json` | `scripts/run_competition_batch.py` | Full pipeline at 1,097-company scale: 1097/1097 terminal, all gates passed; resume made 0 new requests |
-| `composite-score.json` | `scripts/score_competition_v3.py` | The full composite proxy score, all 5 categories combined: **qualification_passed: true, awardable_score: 57.159/100** |
+| `composite-score.json` | `scripts/score_competition_v3.py` | The full composite proxy score, all 5 categories combined: **qualification_passed: true, awardable_score: 57.241/100** |
 
 ## Reproducing these
 
@@ -44,15 +44,19 @@ uv run python scripts/run_competition_batch.py \
   --profiles-output frozen-full-profiles.jsonl --output frozen-full-envelopes.jsonl \
   --report full-scale-batch-report.json --run-id repro-001 --expected-count 1097
 
-# 5. Run both external connectors and audit them
+# 5. Run the three external connectors and audit them
 uv run python scripts/run_external_footprint_batch.py \
   --profiles frozen-full-profiles.jsonl --workdir external-batch \
   --output external-observations.jsonl --report external-report.json
+python3 scripts/run_dibk_connector.py \
+  --organisations frozen-validation-1500.jsonl \
+  --output dibk-observations.jsonl --report dibk-report.json
+cat external-observations.jsonl dibk-observations.jsonl > all-external-observations.jsonl
 uv run python scripts/build_external_audit_labels.py \
-  --observations external-observations.jsonl --profiles frozen-validation-1500.jsonl \
+  --observations all-external-observations.jsonl --profiles frozen-validation-1500.jsonl \
   --fagfolk-cache external-batch/fagfolk-cache --output external-labels.jsonl
 uv run python scripts/evaluate_external_footprint.py \
-  --profiles frozen-validation-1500.jsonl --observations external-observations.jsonl \
+  --profiles frozen-validation-1500.jsonl --observations all-external-observations.jsonl \
   --labels external-labels.jsonl --output external-footprint-qualification.json
 ```
 
