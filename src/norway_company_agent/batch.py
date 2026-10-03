@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import hashlib
 import json
+import urllib.error
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any, Iterable
 
 from .evidence import evidence, utc_now
 from .official import accounting_obligation_assessment
 from .sampling import iter_bulk
+
+LIVE_ENTITY_UA = "SignalpostResearchPOC/1.0 (https://builderr.ai; bounded qualification run)"
 
 
 TERMINAL_STATES = {
@@ -95,6 +100,88 @@ def profiles_from_bulk(path: str | Path, organisation_numbers: Iterable[str]) ->
     }
 
 
+def _fetch_live_entity(org: str) -> dict[str, Any] | None:
+    url = f"https://data.brreg.no/enhetsregisteret/api/enheter/{org}"
+    request = urllib.request.Request(url, headers={"User-Agent": LIVE_ENTITY_UA, "Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            return json.loads(response.read())
+    except urllib.error.HTTPError as exc:
+        if exc.code == 404:
+            return None
+        raise
+
+
+def _live_entity_to_profile(org: str, entity: dict[str, Any]) -> dict[str, Any]:
+    address = entity.get("forretningsadresse") or {}
+    industry = entity.get("naeringskode1") or {}
+    form = entity.get("organisasjonsform") or {}
+    return {
+        "organisation_number": org,
+        "name": entity.get("navn", ""),
+        "legal_form": form.get("kode", ""),
+        "employees": None,  # not exposed by the live per-entity endpoint, only the bulk export
+        "bankrupt": bool(entity.get("konkurs")),
+        "liquidating": bool(entity.get("underAvvikling")),
+        "municipality": address.get("kommune", ""),
+        "municipality_number": address.get("kommunenummer", ""),
+        "industry_code": industry.get("kode", ""),
+        "industry_label": industry.get("beskrivelse", ""),
+        "website": entity.get("hjemmeside", ""),
+        "latest_submitted_accounts": entity.get("sisteInnsendteAarsregnskap", ""),
+        "raw": entity,
+    }
+
+
+def profiles_from_live(organisation_numbers: Iterable[str], *, workers: int = 8) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """Identity anchor via the live per-entity registry API instead of a pre-built bulk CSV.
+
+    Used when --bulk is not supplied, so the batch command is self-sufficient: no separate
+    download/build step is required before running it. Coverage is identical to the bulk
+    path except employee count, which the live endpoint does not expose (only the bulk
+    export carries it); that one field is reported null here rather than guessed.
+    """
+    requested = list(organisation_numbers)
+    retrieved_at = utc_now()
+    missing: list[str] = []
+
+    def fetch_one(org: str) -> tuple[str, dict[str, Any] | None]:
+        return org, _fetch_live_entity(org)
+
+    found: dict[str, dict[str, Any]] = {}
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for org, entity in pool.map(fetch_one, requested):
+            if entity is None:
+                missing.append(org)
+                continue
+            profile = _live_entity_to_profile(org, entity)
+            raw = profile.pop("raw", {})
+            profile["evidence"] = {
+                "registry": evidence(
+                    "registry",
+                    "available",
+                    "official_registry_live",
+                    f"https://data.brreg.no/enhetsregisteret/api/enheter/{org}",
+                    value=raw,
+                    retrieved_at=retrieved_at,
+                    content_sha256=hashlib.sha256(json.dumps(raw, sort_keys=True).encode()).hexdigest(),
+                    source_row_key=org,
+                ),
+                "accounting_obligation": accounting_obligation_assessment(profile),
+            }
+            found[org] = profile
+
+    if missing:
+        raise ValueError(f"Organisation numbers absent from live registry: {missing[:10]}")
+    return [found[org] for org in requested], {
+        "registry_snapshot_sha256": None,
+        "registry_rows_scanned": len(requested),
+        "requested": len(requested),
+        "selected": len(found),
+        "source": "live_per_entity_api",
+    }
+
+
 def evidence_terminal_state(record: dict[str, Any] | None) -> str:
     if not record:
         return "submission_error"
@@ -120,6 +207,8 @@ def terminal_envelope(
     modules: Iterable[str],
     started_at: str,
     completed_at: str,
+    changes: list[dict[str, Any]] | None = None,
+    explanation: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     module_states = {}
     for module in modules:
@@ -138,6 +227,8 @@ def terminal_envelope(
         "completed_at": completed_at,
         "modules": module_states,
         "profile": profile,
+        "changes": changes or [],
+        "explanation": explanation,
     }
 
 

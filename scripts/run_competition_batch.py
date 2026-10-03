@@ -10,11 +10,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from norway_company_agent.batch import profile_complete_for_modules, profiles_from_bulk, read_organisation_inputs, terminal_envelope, validate_envelopes  # noqa: E402
+from norway_company_agent.batch import profile_complete_for_modules, profiles_from_bulk, profiles_from_live, read_organisation_inputs, terminal_envelope, validate_envelopes  # noqa: E402
 from norway_company_agent.evidence import utc_now  # noqa: E402
 from norway_company_agent.identity import apply_website_identity_gate  # noqa: E402
 from norway_company_agent.official import fetch_official_modules  # noqa: E402
+from norway_company_agent.refresh import diff_profile  # noqa: E402
+from norway_company_agent.research import answer_profile  # noqa: E402
 from norway_company_agent.website import fetch_website  # noqa: E402
+
+OVERVIEW_QUESTION = "Who leads this company and what financial facts and locations are available?"
+DEFAULT_STATE_DIR = ROOT / ".signalpost_state"
 
 
 def write_jsonl(path: Path, rows: list[dict]) -> None:
@@ -29,7 +34,7 @@ def write_jsonl(path: Path, rows: list[dict]) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluator-owned Signalpost batch contract")
     parser.add_argument("--organisations", required=True, help="JSON, JSONL, or text organisation-number list")
-    parser.add_argument("--bulk", required=True, help="Frozen Brreg entity snapshot")
+    parser.add_argument("--bulk", help="Frozen Brreg entity snapshot. Omit to anchor identity via the live per-entity API instead -- no separate download/build step needed.")
     parser.add_argument("--output", required=True, help="Terminal envelope JSONL")
     parser.add_argument("--profiles-output", required=True)
     parser.add_argument("--report", required=True)
@@ -39,6 +44,9 @@ def main() -> None:
     parser.add_argument("--checkpoint-every", type=int, default=25)
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--modules", default="registry,accounting_obligation,registry_live,financials,roles,group,locations,website")
+    parser.add_argument("--state-dir", default=str(DEFAULT_STATE_DIR), help="Where yesterday's profiles are read from and today's are saved to, for change tracking across runs")
+    parser.add_argument("--no-state", action="store_true", help="Skip change tracking entirely (changes will always be empty)")
+    parser.add_argument("--no-explanation", action="store_true", help="Skip generating the per-company synthesized explanation")
     args = parser.parse_args()
 
     started_at = utc_now()
@@ -46,7 +54,10 @@ def main() -> None:
     orgs = [item["organisation_number"] for item in organisation_inputs]
     if len(orgs) != args.expected_count:
         raise SystemExit(f"Expected {args.expected_count} organisations, received {len(orgs)}")
-    profiles, registry_metadata = profiles_from_bulk(args.bulk, orgs)
+    if args.bulk:
+        profiles, registry_metadata = profiles_from_bulk(args.bulk, orgs)
+    else:
+        profiles, registry_metadata = profiles_from_live(orgs, workers=args.workers)
     annotations = {item["organisation_number"]: item for item in organisation_inputs}
     for profile in profiles:
         for key in ("evaluation_split", "sample_slice"):
@@ -99,13 +110,39 @@ def main() -> None:
 
     completed_at = utc_now()
     ordered_profiles = [state[org] for org in orgs]
-    envelopes = [
-        terminal_envelope(profile, run_id=args.run_id, modules=requested_modules, started_at=started_at, completed_at=completed_at)
-        for profile in ordered_profiles
-    ]
+
+    previous_by_org: dict[str, dict] = {}
+    state_dir = Path(args.state_dir)
+    previous_snapshot_path = state_dir / "previous-profiles.jsonl"
+    if not args.no_state and previous_snapshot_path.exists():
+        previous_by_org = {
+            row["organisation_number"]: row
+            for row in (json.loads(line) for line in previous_snapshot_path.read_text(encoding="utf-8").splitlines() if line.strip())
+        }
+
+    envelopes = []
+    for profile in ordered_profiles:
+        org = profile["organisation_number"]
+        changes = []
+        if org in previous_by_org:
+            try:
+                changes = diff_profile(previous_by_org[org], profile)
+            except ValueError:
+                changes = []  # organisation number mismatch in stored state; treat as first-seen rather than fail the run
+        explanation = None
+        if not args.no_explanation:
+            answer = answer_profile(profile, OVERVIEW_QUESTION)
+            explanation = {"question": OVERVIEW_QUESTION, "facts": answer["facts"], "unsupported_or_uncertain": answer["unsupported_or_uncertain"]}
+        envelopes.append(terminal_envelope(
+            profile, run_id=args.run_id, modules=requested_modules, started_at=started_at, completed_at=completed_at,
+            changes=changes, explanation=explanation,
+        ))
+
     validation = validate_envelopes(envelopes, args.expected_count)
     write_jsonl(profiles_output, ordered_profiles)
     write_jsonl(Path(args.output), envelopes)
+    if not args.no_state:
+        write_jsonl(previous_snapshot_path, ordered_profiles)
     latencies = sorted(operations.pop("latencies_ms"))
     operations["p50_ms"] = latencies[len(latencies) // 2] if latencies else None
     operations["p95_ms"] = latencies[min(len(latencies) - 1, int(len(latencies) * 0.95))] if latencies else None

@@ -14,3 +14,6 @@ smoke-companies.jsonl
 frozen-validation-1500.jsonl
 
 .DS_Store
+
+# runtime state from daily change-tracking; never committed
+.signalpost_state/
