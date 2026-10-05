@@ -37,6 +37,16 @@ def answer_profile(row: dict[str, Any], question: str) -> dict[str, Any]:
             if value not in (None, ""):
                 facts.append(_claim(label, value, registry, "official_registry_fact"))
 
+    registry_live = evidence.get("registry_live", {})
+    registry_live_value = registry_live.get("value") or {}
+    if all_topics:
+        for label, value in (
+            ("Phone", registry_live_value.get("phone")),
+            ("Email", registry_live_value.get("email")),
+        ):
+            if value not in (None, ""):
+                facts.append(_claim(label, value, registry_live, "official_registry_fact"))
+
     financial = evidence.get("financials", {})
     if all_topics or any(term in q for term in financial_terms):
         records = (financial.get("value") or {}).get("records") or []

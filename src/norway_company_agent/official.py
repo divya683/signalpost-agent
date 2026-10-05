@@ -167,6 +167,8 @@ def normalize_entity(body: Any) -> dict[str, Any]:
         "business_address": body.get("forretningsadresse"),
         "postal_address": body.get("postadresse"),
         "latest_submitted_accounts": body.get("sisteInnsendteAarsregnskap"),
+        "phone": body.get("telefon") or body.get("mobil"),
+        "email": body.get("epostadresse"),
     }
 
 

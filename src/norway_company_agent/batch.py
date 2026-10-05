@@ -129,6 +129,8 @@ def _live_entity_to_profile(org: str, entity: dict[str, Any]) -> dict[str, Any]:
         "industry_label": industry.get("beskrivelse", ""),
         "website": entity.get("hjemmeside", ""),
         "latest_submitted_accounts": entity.get("sisteInnsendteAarsregnskap", ""),
+        "phone": entity.get("telefon") or entity.get("mobil") or "",
+        "email": entity.get("epostadresse") or "",
         "raw": entity,
     }
 
