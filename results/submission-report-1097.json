@@ -1,0 +1,43 @@
+{
+  "run_id": "submission-1097-final",
+  "started_at": "2026-10-05T10:25:59.888615Z",
+  "completed_at": "2026-10-05T10:50:13.295321Z",
+  "expected_count": 1097,
+  "emitted_envelopes": 1097,
+  "resumed_profiles": 0,
+  "profiles_fetched_this_run": 1097,
+  "modules": [
+    "registry",
+    "accounting_obligation",
+    "registry_live",
+    "financials",
+    "roles",
+    "group",
+    "locations",
+    "website"
+  ],
+  "registry": {
+    "registry_snapshot_sha256": null,
+    "registry_rows_scanned": 1097,
+    "requested": 1097,
+    "selected": 1097,
+    "source": "live_per_entity_api"
+  },
+  "operations": {
+    "requests": 8968,
+    "bytes": 310299403,
+    "p50_ms": 839,
+    "p95_ms": 2833
+  },
+  "validation": {
+    "passed": true,
+    "checks": {
+      "exact_expected_count": true,
+      "unique_organisation_numbers": true,
+      "all_entity_states_terminal": true,
+      "all_module_states_terminal": true,
+      "zero_silent_drops": true
+    },
+    "invalid_states": []
+  }
+}

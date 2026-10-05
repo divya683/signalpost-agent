@@ -14,6 +14,8 @@ against real, live data. None of it is hand-written or simulated.
 | `ux-report.json` | Self-assessment against the shipped prototype | UX feature inventory and score |
 | `full-scale-batch-report.json` / `full-scale-resume-report.json` | `scripts/run_competition_batch.py` | Full pipeline at 1,097-company scale: 1097/1097 terminal, all gates passed; resume made 0 new requests |
 | `composite-score.json` | `scripts/score_competition_v3.py` | The full composite proxy score, all 5 categories combined: **qualification_passed: true, awardable_score: 57.241/100** |
+| `submission-profiles-1097.jsonl` / `submission-envelopes-1097.jsonl` | `scripts/run_competition_batch.py`, no `--bulk`, no `--no-explanation` | **At least 1,000 company profiles**, as required under "What to Submit": a fresh, complete run against the real 1,097-company corpus using the exact declared command, live registry lookups only (no pre-built files), every envelope carrying a real `explanation` and `changes` field. 777/1097 profiles carry a phone number, 642/1097 an email, both read from the live registry response. Run with `--no-state` since this is a one-off coverage demonstration, not a real daily run; it does not read or write the actual change-tracking state. |
+| `budget-verification.json` | `scripts/run_competition_batch.py` | Daily resource-budget compliance: a 100-company run completed in 2m02s using ~636 requests and $0 cost, against the declared daily limits of 45 minutes / 2,000 requests / $10 |
 
 ## Reproducing these
 
