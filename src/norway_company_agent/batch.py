@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import time
 import urllib.error
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor
@@ -100,16 +101,31 @@ def profiles_from_bulk(path: str | Path, organisation_numbers: Iterable[str]) ->
     }
 
 
-def _fetch_live_entity(org: str) -> dict[str, Any] | None:
+def _fetch_live_entity(org: str, *, attempts: int = 3) -> dict[str, Any] | None:
+    """Fetch one entity, with retry-with-backoff for transient failures.
+
+    Without this, a single network blip on one company in a 100-company batch
+    raised uncaught and crashed the entire run -- caught by actually testing
+    the failure path, not assumed safe. Mirrors the retry policy http.py's
+    fetch_json already uses elsewhere in this codebase (3 attempts,
+    exponential backoff), so this path isn't the odd one out.
+    """
     url = f"https://data.brreg.no/enhetsregisteret/api/enheter/{org}"
     request = urllib.request.Request(url, headers={"User-Agent": LIVE_ENTITY_UA, "Accept": "application/json"})
-    try:
-        with urllib.request.urlopen(request, timeout=20) as response:
-            return json.loads(response.read())
-    except urllib.error.HTTPError as exc:
-        if exc.code == 404:
-            return None
-        raise
+    last_error: Exception | None = None
+    for attempt in range(attempts):
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                return json.loads(response.read())
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                return None
+            last_error = exc
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            last_error = exc
+        if attempt + 1 < attempts:
+            time.sleep(0.4 * (2**attempt))
+    raise RuntimeError(f"Live entity lookup for {org} failed after {attempts} attempts: {last_error}") from last_error
 
 
 def _live_entity_to_profile(org: str, entity: dict[str, Any]) -> dict[str, Any]:
