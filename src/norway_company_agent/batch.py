@@ -161,16 +161,38 @@ def profiles_from_live(organisation_numbers: Iterable[str], *, workers: int = 8)
     """
     requested = list(organisation_numbers)
     retrieved_at = utc_now()
-    missing: list[str] = []
 
     def fetch_one(org: str) -> tuple[str, dict[str, Any] | None]:
         return org, _fetch_live_entity(org)
 
     found: dict[str, dict[str, Any]] = {}
+    missing: list[str] = []
     with ThreadPoolExecutor(max_workers=workers) as pool:
         for org, entity in pool.map(fetch_one, requested):
             if entity is None:
+                # Confirmed 404, not a fetch failure (those already retried and would have
+                # raised). A single nonexistent company must not take down the other 99 --
+                # every other module in this codebase already reports 404 as evidence
+                # status "not_found" rather than crashing; this follows that same pattern
+                # instead of being the one place that still aborts the whole batch. Caught
+                # by actually testing a real nonexistent organisation number, not assumed.
                 missing.append(org)
+                profile = {
+                    "organisation_number": org, "name": "", "legal_form": "", "employees": None,
+                    "bankrupt": False, "liquidating": False, "municipality": "", "municipality_number": "",
+                    "industry_code": "", "industry_label": "", "website": "",
+                    "latest_submitted_accounts": "", "phone": "", "email": "",
+                }
+                profile["evidence"] = {
+                    "registry": evidence(
+                        "registry", "not_found", "official_registry_live",
+                        f"https://data.brreg.no/enhetsregisteret/api/enheter/{org}",
+                        retrieved_at=retrieved_at, source_row_key=org,
+                        note="Organisation number not found in the live registry",
+                    ),
+                    "accounting_obligation": accounting_obligation_assessment(profile),
+                }
+                found[org] = profile
                 continue
             profile = _live_entity_to_profile(org, entity)
             raw = profile.pop("raw", {})
@@ -189,13 +211,12 @@ def profiles_from_live(organisation_numbers: Iterable[str], *, workers: int = 8)
             }
             found[org] = profile
 
-    if missing:
-        raise ValueError(f"Organisation numbers absent from live registry: {missing[:10]}")
     return [found[org] for org in requested], {
         "registry_snapshot_sha256": None,
         "registry_rows_scanned": len(requested),
         "requested": len(requested),
         "selected": len(found),
+        "not_found": missing,
         "source": "live_per_entity_api",
     }
 
