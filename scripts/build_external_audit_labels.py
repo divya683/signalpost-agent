@@ -75,6 +75,72 @@ def verify_dibk_record(org: str, claimed_approved: bool, claimed_period_to: str 
     return None
 
 
+def _ted_tokens(name: str) -> set[str]:
+    legal_forms = {"as", "asa", "da", "ans", "enk", "nuf", "sti", "ba", "sa"}
+    return {t for t in re.findall(r"[a-zA-Z0-9]+", name.casefold()) if t not in legal_forms and len(t) > 1}
+
+
+def verify_ted_notice(
+    org: str, publication_number: str, expected_name: str, expected_municipality: str, retries: int = 4
+) -> tuple[bool | None, bool | None]:
+    """Independently re-derive a TED observation from a fresh query.
+
+    Re-queries TED live by buyer-identifier (not by reading back the observation),
+    finds the specific notice by its publication number, and recomputes the
+    exact-ID match and the name/city corroboration directly from the raw
+    buyer-identifier/buyer-name/buyer-city arrays at the matching index -- the
+    same inputs the connector saw, re-read fresh rather than trusted as-is.
+    """
+    body = json.dumps({
+        "query": f'buyer-identifier="{org}"',
+        "fields": ["ND", "publication-number", "buyer-name", "buyer-city", "buyer-identifier"],
+        "limit": 20,
+    }).encode()
+    request = urllib.request.Request(
+        "https://api.ted.europa.eu/v3/notices/search", data=body, method="POST",
+        headers={"Content-Type": "application/json", "Accept": "application/json", "User-Agent": UA},
+    )
+    for attempt in range(retries):
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                notices = json.loads(response.read()).get("notices", [])
+            break
+        except Exception:
+            if attempt == retries - 1:
+                return None, None
+            time.sleep(2 * (attempt + 1))
+    else:
+        return None, None
+
+    notice = next(
+        (n for n in notices if str(n.get("publication-number") or n.get("ND") or "") == publication_number),
+        None,
+    )
+    if notice is None:
+        return False, None  # the notice this observation claims no longer turns up for this org
+
+    raw_identifiers = notice.get("buyer-identifier") or []
+    indices = [i for i, ident in enumerate(raw_identifiers) if str(ident).replace(" ", "") == org]
+    if not indices:
+        return False, None
+
+    def value_at(field: dict | None, index: int) -> str | None:
+        if not isinstance(field, dict):
+            return None
+        for values in field.values():
+            if isinstance(values, list) and 0 <= index < len(values):
+                return values[index]
+        return None
+
+    names = [n for i in indices if (n := value_at(notice.get("buyer-name"), i))]
+    cities = [c for i in indices if (c := value_at(notice.get("buyer-city"), i))]
+    name_overlap = any(_ted_tokens(n) & _ted_tokens(expected_name) for n in names)
+    city_overlap = bool(expected_municipality) and any(
+        expected_municipality.casefold() in c.casefold() for c in cities
+    )
+    return True, (name_overlap or city_overlap)
+
+
 def verify_fagfolk_page(cache_path: Path, expected_name: str, expected_org: str, claimed_rating: float, claimed_count: int) -> tuple[bool, bool]:
     if not cache_path.exists():
         return False, False
@@ -145,6 +211,21 @@ def main() -> None:
                 continue
             checked += 1
             labels.append({"id": obs["id"], "exact_entity": True, "metric_correct": metric_ok})
+
+        elif obs["platform"] == "ted":
+            profile = profiles_by_org.get(org, {})
+            publication_number = str(obs.get("source_url", "")).rsplit("/", 1)[-1]
+            exact_entity, metric_correct = verify_ted_notice(
+                org, publication_number, profile.get("name", ""), profile.get("municipality", "")
+            )
+            time.sleep(args.wikidata_delay)
+            if exact_entity is None:
+                unverifiable.append(obs["id"])
+                continue
+            checked += 1
+            if not exact_entity:
+                mismatched.append(obs["id"])
+            labels.append({"id": obs["id"], "exact_entity": bool(exact_entity), "metric_correct": bool(metric_correct)})
 
         elif obs["platform"] == "company_directory":
             profile = profiles_by_org.get(org, {})
