@@ -7,9 +7,49 @@ licences, source-rights assumptions, and expected cost.
 
 ## Models / LLM usage
 
-**None.** This submission does not call any LLM or paid model API. All facts
-are retrieved directly from official/permitted structured sources and cited
-to their source; no generative synthesis step exists yet.
+**None, for everything that is scored.** The competition pipeline
+(`scripts/run_competition_batch.py`), the committed `results/`, and the live
+demo site never call an LLM or paid model API. Every fact is retrieved
+directly from official/permitted structured sources and cited to its source;
+no generative synthesis step exists in that path, and its cost is $0.
+
+Two optional developer/judge convenience tools, outside the scored pipeline,
+can additionally call an LLM, off by default and only if the person running
+them supplies their own API key:
+
+- `scripts/dashboard.py`: a local browser page for watching a single live
+  lookup happen step by step (see "Testing it interactively" below). Its
+  one-paragraph "AI-generated summary" box is blank unless a key is typed in.
+- `npm/signalpost-lookup`: the same single-lookup tool as a zero-dependency
+  Node CLI (`npx signalpost-lookup <org>`), useful for anyone who wants to
+  test without Python/uv installed at all. Its summary section only runs
+  with `--llm-key` or `ANTHROPIC_API_KEY` set.
+
+Neither tool is read by the batch pipeline, neither affects the committed
+results, and leaving the key out of either reproduces the exact $0, no-LLM
+behavior described above.
+
+## Testing it interactively
+
+Beyond the batch command below, two tools exist specifically to let a judge
+watch the agent work on one company, live, in real time, rather than reading
+a pre-built batch report:
+
+```bash
+# Browser dashboard: type any organisation number, watch each live HTTP
+# step happen, see the cited facts as they come back.
+uv run python scripts/dashboard.py
+
+# Or the same thing from a terminal, no browser:
+uv run python scripts/watch_live_lookup.py --org 923609016
+
+# Or with no Python at all, a standalone Node CLI hitting the same public
+# APIs directly:
+npx signalpost-lookup 923609016
+```
+
+All three run the identical live network calls as the batch pipeline; none
+of them read from a pre-built file or the committed 1,097-company sample.
 
 ## APIs and data sources used
 
