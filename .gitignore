@@ -12,6 +12,7 @@ signalpost-universe.jsonl.gz
 entry-companies.jsonl
 smoke-companies.jsonl
 frozen-validation-1500.jsonl
+companies.jsonl
 
 .DS_Store
 
