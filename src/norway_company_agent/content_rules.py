@@ -48,6 +48,15 @@ JOB_LANDING_LABELS = {
     "work with us", "jobb hos oss", "bli en av oss", "join us", "open positions",
     "apply", "søk", "sok", "recruitment", "rekruttering", "our people", "people",
 }
+# Pages that live inside a careers section without being an advert.
+CAREER_SUBPAGE_LABELS = {
+    "contacts", "global contacts", "contact", "kontakt", "benefits", "fordeler",
+    "culture", "kultur", "process", "prosess", "faq", "students", "studenter",
+    "graduates", "trainee", "internship", "praktikant", "why us", "hvorfor oss",
+    "about us", "om oss", "our values", "verdier", "life at", "meet us",
+    "recruitment process", "rekrutteringsprosess", "summer job", "sommerjobb",
+    "open application", "apne soknad", "spontaneous application",
+}
 # The national job portal. A link into its search results is a query, not an ad.
 NAV_PORTAL_HOSTS = {"arbeidsplassen.nav.no", "nav.no", "www.nav.no"}
 SEARCH_QUERY_KEYS = {"q", "query", "search", "sok", "soek", "keyword", "keywords", "fritekst"}
@@ -189,10 +198,21 @@ def validate_job_ad(page: dict[str, Any], *, own_site_host: str | None = None, c
         reasons.append("URL has no advert slug or id, so it is a careers landing page")
     if own_site_host and host and host != own_site_host.casefold().removeprefix("www."):
         reasons.append("advert is hosted off the company's own confirmed domain")
+    if any(_normalize_label(part.replace("-", " ").replace("_", " ")) in CAREER_SUBPAGE_LABELS for part in parts):
+        reasons.append("URL is a careers section subpage (contacts, benefits, process) rather than an advert")
+
+    # A slug alone is not evidence of an advert: a careers section's own
+    # subpages carry slugs too. Require a positive advert marker, which is
+    # either schema.org JobPosting markup (what search engines require to index
+    # an advert) or a numeric advert id in the URL.
+    markup = page.get("job_posting") or {}
+    advert_id_in_url = bool(re.search(r"\d{4,}", parsed.path))
+    if not markup and not advert_id_in_url:
+        reasons.append("no JobPosting markup and no advert id, so this is not demonstrably one advert")
 
     # The employer named in the advert must be this company, so a parent's
     # vacancy republished on a shared careers site does not count.
-    employer = page.get("employer_name")
+    employer = page.get("employer_name") or markup.get("employer_name")
     if employer and company_name:
         # Legal-form suffixes are shared by most Norwegian companies, so they
         # are stripped before comparing. Leaving "AS" in would make every

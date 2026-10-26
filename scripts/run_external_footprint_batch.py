@@ -77,7 +77,27 @@ def main() -> None:
         "--report", str(fagfolk_report),
     ])
 
-    merged = read_jsonl(wikidata_output) + read_jsonl(fagfolk_output)
+    news_output = workdir / "company-site-news-observations.jsonl"
+    news_report = workdir / "company-site-news-report.json"
+    print("Running company-site news extractor...")
+    run([
+        python, str(ROOT / "scripts/extract_company_site_news.py"),
+        "--profiles", args.profiles,
+        "--output", str(news_output),
+        "--report", str(news_report),
+    ])
+
+    jobs_output = workdir / "company-site-job-observations.jsonl"
+    jobs_report = workdir / "company-site-job-report.json"
+    print("Running company-site job-advert extractor...")
+    run([
+        python, str(ROOT / "scripts/extract_company_site_jobs.py"),
+        "--profiles", args.profiles,
+        "--output", str(jobs_output),
+        "--report", str(jobs_report),
+    ])
+
+    merged = read_jsonl(wikidata_output) + read_jsonl(fagfolk_output) + read_jsonl(news_output) + read_jsonl(jobs_output)
     seen_ids: set[str] = set()
     deduped = []
     for item in merged:
@@ -91,7 +111,12 @@ def main() -> None:
 
     Path(args.output).write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in deduped), encoding="utf-8")
     report = {
-        "connectors_run": ["wikidata_exact_orgnr_p2333_v1", "fagfolkguiden_embedded_google_reviews_v1"],
+        "connectors_run": [
+            "wikidata_exact_orgnr_p2333_v1",
+            "fagfolkguiden_embedded_google_reviews_v1",
+            "company_site_dated_news_post_v1",
+            "company_site_single_job_advert_v1",
+        ],
         "companies_in_batch": len(orgs),
         "merged_observations": len(deduped),
         "duplicate_ids_dropped": len(merged) - len(deduped),

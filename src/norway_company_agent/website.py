@@ -34,6 +34,10 @@ PRIORITY_TERMS = (
     "om-oss", "om_oss", "about", "kontakt", "contact", "ledelse", "management",
     "team", "people", "locations", "lokasjoner", "avdelinger", "butikker",
     "news", "press", "aktuelt", "nyheter",
+    # Careers paths, so an individual advert can be captured and validated
+    # rather than inferred from the existence of a landing page.
+    "karriere", "jobb", "stilling", "stillinger", "ledige-stillinger",
+    "careers", "jobs", "vacancies",
 )
 
 
@@ -229,6 +233,7 @@ def _fetch_secondary_page(url: str, *, homepage_domain: str, timeout: float, max
             "main_text_excerpt": page_text[:5000],
             "content_sha256": __import__("hashlib").sha256(raw).hexdigest(),
             "date_candidates": _date_candidates(page_soup, page_html, final_url),
+            "job_posting": _job_posting_markup(page_html, final_url),
         }
         return page, _social_links(final_url, page_soup), 2, len(raw), elapsed, None
     except Exception as exc:
@@ -276,6 +281,51 @@ def _date_candidates(soup: Any, html: str, final_url: str) -> dict[str, str]:
     walk(structured.get("json-ld", []))
     walk(structured.get("microdata", []))
     return found
+
+
+def _job_posting_markup(html: str, final_url: str) -> dict[str, Any] | None:
+    """Return schema.org JobPosting fields when a page carries one advert.
+
+    JobPosting is the standard markup for a job advert and is what search
+    engines require to index one, so its presence is the clearest available
+    signal that a page is a single advert rather than a careers landing page,
+    a contacts page, or a vacancy list. hiringOrganization additionally names
+    the employer, which is what distinguishes a company's own advert from its
+    parent's republished on a shared careers site.
+    """
+    try:
+        structured = extruct.extract(html, base_url=final_url, syntaxes=["json-ld", "microdata"])
+    except Exception:
+        return None
+    found: dict[str, Any] = {}
+
+    def walk(value: Any) -> None:
+        if found:
+            return
+        if isinstance(value, dict):
+            types = value.get("@type") or value.get("type") or ""
+            type_names = {str(item).casefold() for item in (types if isinstance(types, list) else [types])}
+            if "jobposting" in type_names:
+                organisation = value.get("hiringOrganization") or value.get("properties", {}).get("hiringOrganization")
+                if isinstance(organisation, list):
+                    organisation = organisation[0] if organisation else None
+                employer = organisation.get("name") if isinstance(organisation, dict) else organisation
+                found.update({
+                    "title": str(value.get("title") or "")[:300] or None,
+                    "date_posted": str(value.get("datePosted") or "")[:64] or None,
+                    "valid_through": str(value.get("validThrough") or "")[:64] or None,
+                    "employer_name": str(employer or "")[:200] or None,
+                })
+                return
+            for child in value.values():
+                walk(child)
+        elif isinstance(value, list):
+            for child in value:
+                walk(child)
+
+    walk(structured.get("json-ld", []))
+    walk(structured.get("microdata", []))
+    return found or None
 
 
 def _jsonld_organisations(metadata: dict[str, Any]) -> list[dict[str, Any]]:

@@ -42,6 +42,7 @@ from scripts.run_sentiment_model import MODEL_REVISION, normalize_generated_labe
 from scripts.score_company_completeness import score_rows, summarize  # noqa: E402
 from scripts.extract_company_site_activity import observation as site_activity_observation  # noqa: E402
 from scripts.extract_company_site_news import observation as site_news_observation  # noqa: E402
+from scripts.extract_company_site_jobs import observations as site_job_observations  # noqa: E402
 from scripts.build_verified_observations import build as build_verified_observations  # noqa: E402
 from scripts.run_google_news_rss_connector import exact_title_match  # noqa: E402
 from scripts.run_linkedin_guest_jobs_connector import canonical_company_url, parse_detail_company_urls, parse_job_cards, parse_typeahead  # noqa: E402
@@ -1475,12 +1476,66 @@ class AuditedOwnershipAndContentRules(unittest.TestCase):
             with self.subTest(case=label):
                 self.assertFalse(validate_news_item(page)["publishable"])
 
+    def test_site_job_extractor_publishes_one_advert_and_needs_confirmed_ownership(self):
+        profile = {
+            "organisation_number": "923609016",
+            "name": "HAVELEKTRO AS",
+            "evidence": {"website": {
+                "status": "available", "retrieved_at": "2026-10-26T00:00:00Z",
+                "value": {
+                    "final_url": "https://havelektro.no/",
+                    "identity_assessment": {
+                        "publishable": True, "score": 1.0, "own_site_confirmed": True,
+                        "ownership_basis": "exact organisation number present on the site",
+                    },
+                    "pages": [
+                        {"url": "https://havelektro.no/karriere/elektriker-bergen-2026",
+                         "title": "Elektriker i Bergen", "content_sha256": "a" * 64,
+                         "job_posting": {"title": "Elektriker", "date_posted": "2026-10-01"}},
+                        {"url": "https://havelektro.no/karriere/", "title": "Karriere", "content_sha256": "b" * 64},
+                    ],
+                },
+            }},
+        }
+        items, stats = site_job_observations(profile)
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["signal_type"], "job_posting")
+        self.assertTrue(publishable_observation(items[0]))
+        self.assertEqual(stats["rejected"], 1)  # the landing page
+
+        not_owned = copy.deepcopy(profile)
+        not_owned["evidence"]["website"]["value"]["identity_assessment"]["own_site_confirmed"] = False
+        self.assertEqual(site_job_observations(not_owned)[0], [])
+
     def test_jobs_require_a_single_advert_for_this_company(self):
         good = validate_job_ad(
-            {"url": "https://havelektro.no/karriere/elektriker-bergen-2026", "title": "Elektriker i Bergen"},
+            {"url": "https://havelektro.no/karriere/elektriker-bergen-2026", "title": "Elektriker i Bergen",
+             "job_posting": {"title": "Elektriker", "date_posted": "2026-10-01"}},
             own_site_host="havelektro.no", company_name="HAVELEKTRO AS",
         )
         self.assertTrue(good["publishable"], good["reasons"])
+
+        # A careers subpage carries a slug but is not an advert.
+        contacts = validate_job_ad(
+            {"url": "https://havelektro.no/karriere/global-contacts", "title": "Global Career Contacts"},
+            own_site_host="havelektro.no", company_name="HAVELEKTRO AS",
+        )
+        self.assertFalse(contacts["publishable"])
+
+        # A slug with no JobPosting markup and no advert id is not enough.
+        unproven = validate_job_ad(
+            {"url": "https://havelektro.no/karriere/noe-helt-annet", "title": "Noe helt annet"},
+            own_site_host="havelektro.no", company_name="HAVELEKTRO AS",
+        )
+        self.assertFalse(unproven["publishable"])
+
+        # The employer in the markup must be this company, not the parent.
+        parent_markup = validate_job_ad(
+            {"url": "https://havelektro.no/karriere/elektriker-bergen-2026", "title": "Elektriker",
+             "job_posting": {"employer_name": "Storkonsern Holding AS"}},
+            own_site_host="havelektro.no", company_name="HAVELEKTRO AS",
+        )
+        self.assertFalse(parent_markup["publishable"])
 
         landing = validate_job_ad(
             {"url": "https://havelektro.no/karriere/", "title": "Karriere"},
