@@ -210,9 +210,44 @@ def _priority_links(base_url: str, soup: BeautifulSoup, limit: int = 4) -> list[
     return [url for url, _ in sorted(candidates.items(), key=lambda item: (item[1], item[0]))[:limit]]
 
 
-def _fetch_secondary_page(url: str, *, homepage_domain: str, timeout: float, max_bytes: int) -> tuple[dict[str, Any] | None, list[dict[str, str]], int, int, int, str | None]:
+SECTION_INDEX = re.compile(
+    r"/(?:news|press|presse|aktuelt|nyheter|artikler|articles|blog|blogg|"
+    r"karriere|jobb|stilling|stillinger|ledige-stillinger|careers|jobs|vacancies)(?:/|$)",
+    re.I,
+)
+
+
+def _item_links(base_url: str, soup: BeautifulSoup, *, homepage_domain: str, limit: int = 3) -> list[str]:
+    """Links from a news or careers index to the individual items beneath it.
+
+    Without this hop the crawl only ever sees the index, and an index is not a
+    dated post or a single advert, so the content rules correctly reject it and
+    the company ends up with no activity at all.
+    """
+    base_depth = len([part for part in urllib.parse.urlparse(base_url).path.split("/") if part])
+    found: dict[str, None] = {}
+    for node in soup.select("a[href]"):
+        candidate = urllib.parse.urljoin(base_url, str(node.get("href") or ""))
+        parsed = urllib.parse.urlparse(candidate)
+        if parsed.scheme not in {"http", "https"} or _registered_domain(candidate) != homepage_domain:
+            continue
+        parts = [part for part in parsed.path.split("/") if part]
+        if len(parts) <= base_depth or not SECTION_INDEX.search(parsed.path):
+            continue
+        slug = parts[-1]
+        # An item has a wordy slug or a numeric id; a pagination or filter link
+        # does not.
+        if not (re.search(r"[a-z]{3}", slug, re.I) and (len(slug) >= 12 or "-" in slug) or re.search(r"\d{4,}", slug)):
+            continue
+        found.setdefault(urllib.parse.urlunparse((parsed.scheme, parsed.netloc, parsed.path, "", "", "")), None)
+        if len(found) >= limit:
+            break
+    return list(found)
+
+
+def _fetch_secondary_page(url: str, *, homepage_domain: str, timeout: float, max_bytes: int) -> tuple[dict[str, Any] | None, list[dict[str, str]], int, int, int, str | None, list[str]]:
     if not _robots_allowed(url, timeout):
-        return None, [], 1, 0, 0, "robots.txt disallows page"
+        return None, [], 1, 0, 0, "robots.txt disallows page", []
     started = time.monotonic()
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml"})
     try:
@@ -221,26 +256,44 @@ def _fetch_secondary_page(url: str, *, homepage_domain: str, timeout: float, max
             elapsed = int((time.monotonic() - started) * 1000)
             final_url = response.geturl()
             if len(raw) > max_bytes or "html" not in response.headers.get("content-type", "").lower():
-                return None, [], 2, len(raw), elapsed, "unsupported or oversized page"
+                return None, [], 2, len(raw), elapsed, "unsupported or oversized page", []
             if _registered_domain(final_url) != homepage_domain:
-                return None, [], 2, len(raw), elapsed, "redirected outside registered domain"
+                return None, [], 2, len(raw), elapsed, "redirected outside registered domain", []
         page_html = raw.decode("utf-8", errors="replace")
         page_soup = BeautifulSoup(page_html, "lxml")
         page_text = trafilatura.extract(page_html, url=final_url, include_links=False, include_tables=False, favor_precision=True) or ""
+        page_structured = _page_structured(page_html, final_url)
         page = {
             "url": final_url,
             "title": page_soup.title.get_text(" ", strip=True)[:500] if page_soup.title else "",
             "main_text_excerpt": page_text[:5000],
             "content_sha256": __import__("hashlib").sha256(raw).hexdigest(),
-            "date_candidates": _date_candidates(page_soup, page_html, final_url),
-            "job_posting": _job_posting_markup(page_html, final_url),
+            "date_candidates": _date_candidates(page_soup, page_structured),
+            "job_posting": _job_posting_markup(page_structured),
         }
-        return page, _social_links(final_url, page_soup), 2, len(raw), elapsed, None
+        item_links = (
+            _item_links(final_url, page_soup, homepage_domain=homepage_domain)
+            if SECTION_INDEX.search(urllib.parse.urlparse(final_url).path) else []
+        )
+        return page, _social_links(final_url, page_soup), 2, len(raw), elapsed, None, item_links
     except Exception as exc:
-        return None, [], 2, 0, int((time.monotonic() - started) * 1000), f"{type(exc).__name__}: {str(exc)[:120]}"
+        return None, [], 2, 0, int((time.monotonic() - started) * 1000), f"{type(exc).__name__}: {str(exc)[:120]}", []
 
 
-def _date_candidates(soup: Any, html: str, final_url: str) -> dict[str, str]:
+def _page_structured(html: str, final_url: str) -> dict[str, Any]:
+    """Parse a page's structured data once, for all readers of it.
+
+    extruct runs several parsers over the document, so calling it separately
+    for dates and for JobPosting markup doubled the cost of every captured
+    page for no benefit.
+    """
+    try:
+        return extruct.extract(html, base_url=final_url, syntaxes=["json-ld", "microdata"])
+    except Exception:
+        return {}
+
+
+def _date_candidates(soup: Any, structured: dict[str, Any]) -> dict[str, str]:
     """Collect every date-ish field a page exposes, labelled by where it came from.
 
     Both publication and modification fields are collected on purpose. The
@@ -262,11 +315,6 @@ def _date_candidates(soup: Any, html: str, final_url: str) -> dict[str, str]:
         if tag.get("datetime"):
             remember("datetime", tag.get("datetime"))
             break
-    try:
-        structured = extruct.extract(html, base_url=final_url, syntaxes=["json-ld", "microdata"])
-    except Exception:
-        structured = {}
-
     def walk(value: Any) -> None:
         if isinstance(value, dict):
             for key, child in value.items():
@@ -283,7 +331,7 @@ def _date_candidates(soup: Any, html: str, final_url: str) -> dict[str, str]:
     return found
 
 
-def _job_posting_markup(html: str, final_url: str) -> dict[str, Any] | None:
+def _job_posting_markup(structured: dict[str, Any]) -> dict[str, Any] | None:
     """Return schema.org JobPosting fields when a page carries one advert.
 
     JobPosting is the standard markup for a job advert and is what search
@@ -293,10 +341,6 @@ def _job_posting_markup(html: str, final_url: str) -> dict[str, Any] | None:
     the employer, which is what distinguishes a company's own advert from its
     parent's republished on a shared careers site.
     """
-    try:
-        structured = extruct.extract(html, base_url=final_url, syntaxes=["json-ld", "microdata"])
-    except Exception:
-        return None
     found: dict[str, Any] = {}
 
     def walk(value: Any) -> None:
@@ -402,8 +446,18 @@ def fetch_website(url: str | None, *, timeout: float = 15.0, max_bytes: int = 2_
         bytes_received = len(raw)
         page_latencies = [elapsed]
         homepage_domain = value["registered_domain"]
-        for page_url in _priority_links(final_url, soup):
-            page, page_social, page_requests, page_bytes, page_elapsed, page_error = _fetch_secondary_page(
+        # Section indexes yield the individual items beneath them, which are
+        # queued for one further hop. Without that hop the crawl only sees the
+        # index, and an index is never a dated post or a single advert.
+        queue = list(_priority_links(final_url, soup))
+        seen_urls = {final_url}
+        item_budget = 4
+        while queue:
+            page_url = queue.pop(0)
+            if page_url in seen_urls:
+                continue
+            seen_urls.add(page_url)
+            page, page_social, page_requests, page_bytes, page_elapsed, page_error, item_links = _fetch_secondary_page(
                 page_url,
                 homepage_domain=homepage_domain,
                 timeout=timeout,
@@ -416,6 +470,12 @@ def fetch_website(url: str | None, *, timeout: float = 15.0, max_bytes: int = 2_
             if page:
                 pages.append(page)
                 social.extend(page_social)
+                for item_url in item_links:
+                    if item_budget <= 0:
+                        break
+                    if item_url not in seen_urls:
+                        queue.append(item_url)
+                        item_budget -= 1
             elif page_error:
                 crawl_errors.append({"url": page_url, "error": page_error})
         value["pages"] = pages

@@ -27,12 +27,17 @@ def main() -> None:
         before += len(links)
         normalized = [item for item in (normalize_social_url(link.get("url", "")) for link in links) if item]
         value["discovered_social_links"] = list({(item["platform"], item["url"]): item for item in normalized}.values())
-        publishable = value.get("identity_assessment", {}).get("publishable", True)
+        # Both gates fail closed on a missing assessment. Defaulting either to
+        # True would let this pass re-publish links that the identity gate had
+        # already withheld, which is the opposite of what this script is for.
+        assessment = value.get("identity_assessment") or {}
+        publishable = bool(assessment.get("publishable"))
+        own_site = bool(assessment.get("own_site_confirmed"))
         assessments = [assess_social_identity(row, link) for link in value["discovered_social_links"]]
         value["social_link_assessments"] = assessments
         value["social_links"] = [
             {"platform": item["platform"], "url": item["url"]}
-            for item in assessments if publishable and item["publishable"]
+            for item in assessments if publishable and own_site and item["publishable"]
         ]
         after += len(value["discovered_social_links"])
     temporary = path.with_suffix(path.suffix + ".tmp")
