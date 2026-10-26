@@ -228,10 +228,54 @@ def _fetch_secondary_page(url: str, *, homepage_domain: str, timeout: float, max
             "title": page_soup.title.get_text(" ", strip=True)[:500] if page_soup.title else "",
             "main_text_excerpt": page_text[:5000],
             "content_sha256": __import__("hashlib").sha256(raw).hexdigest(),
+            "date_candidates": _date_candidates(page_soup, page_html, final_url),
         }
         return page, _social_links(final_url, page_soup), 2, len(raw), elapsed, None
     except Exception as exc:
         return None, [], 2, 0, int((time.monotonic() - started) * 1000), f"{type(exc).__name__}: {str(exc)[:120]}"
+
+
+def _date_candidates(soup: Any, html: str, final_url: str) -> dict[str, str]:
+    """Collect every date-ish field a page exposes, labelled by where it came from.
+
+    Both publication and modification fields are collected on purpose. The
+    caller needs to see that only a modified stamp existed in order to reject
+    the item, rather than silently treating it as a publish date.
+    """
+    found: dict[str, str] = {}
+
+    def remember(key: str, value: Any) -> None:
+        text = str(value or "").strip()
+        if text and key not in found:
+            found[key] = text[:64]
+
+    for tag in soup.find_all("meta"):
+        name = (tag.get("property") or tag.get("name") or tag.get("itemprop") or "").strip()
+        if name and re.search(r"(date|time|publish|modif|updat)", name, re.I):
+            remember(name, tag.get("content"))
+    for tag in soup.find_all("time"):
+        if tag.get("datetime"):
+            remember("datetime", tag.get("datetime"))
+            break
+    try:
+        structured = extruct.extract(html, base_url=final_url, syntaxes=["json-ld", "microdata"])
+    except Exception:
+        structured = {}
+
+    def walk(value: Any) -> None:
+        if isinstance(value, dict):
+            for key, child in value.items():
+                if isinstance(child, (str, int, float)) and re.fullmatch(r"date(Published|Created|Modified)", str(key)):
+                    remember(str(key), child)
+                else:
+                    walk(child)
+        elif isinstance(value, list):
+            for child in value:
+                walk(child)
+
+    walk(structured.get("json-ld", []))
+    walk(structured.get("microdata", []))
+    return found
 
 
 def _jsonld_organisations(metadata: dict[str, Any]) -> list[dict[str, Any]]:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import gzip
 import csv
@@ -27,6 +28,7 @@ from norway_company_agent.external_footprint import aggregate_footprint, publish
 from norway_company_agent.external_tasks import plan_external_tasks  # noqa: E402
 from norway_company_agent.external_control import development_score, run_company_control, strategy_order  # noqa: E402
 from norway_company_agent.identity import apply_website_identity_gate, assess_social_identity, assess_website_identity  # noqa: E402
+from norway_company_agent.content_rules import validate_job_ad, validate_news_item  # noqa: E402
 from norway_company_agent.website import _extraction_state, _priority_links, _social_links, assert_public_url, normalize_homepage, normalize_social_url, structured_social_links  # noqa: E402
 from norway_company_agent.batch import evidence_terminal_state, profile_complete_for_modules, read_organisation_inputs, terminal_envelope, validate_envelopes  # noqa: E402
 from norway_company_agent.snapshots import SnapshotFetcher  # noqa: E402
@@ -570,22 +572,44 @@ class CompletenessScoreTests(unittest.TestCase):
         self.assertFalse(exact_title_match("VIND HOLDING AS", "Inntektene til Aneo Roan Vind Holding AS stupte - mn24.no"))
         self.assertFalse(exact_title_match("CONSTO AS", "Drastisk fall hos Consto Bergen AS - BT"))
 
-    def test_site_news_requires_exact_identity_and_a_captured_news_path(self):
+    def test_site_news_requires_exact_identity_a_news_path_ownership_and_a_publish_date(self):
         profile = {
             "organisation_number": "923609016",
             "evidence": {"website": {
                 "status": "available", "retrieved_at": "2026-08-23T00:00:00Z",
                 "value": {
-                    "identity_assessment": {"publishable": True, "score": 1.0},
-                    "pages": [{"url": "https://example.test/aktuelt/new-contract", "title": "New contract", "content_sha256": "a" * 64}],
+                    "identity_assessment": {
+                        "publishable": True, "score": 1.0,
+                        "own_site_confirmed": True, "ownership_basis": "exact organisation number present on the site",
+                    },
+                    "pages": [{
+                        "url": "https://example.test/aktuelt/new-contract-signed",
+                        "title": "New contract signed",
+                        "content_sha256": "a" * 64,
+                        "date_candidates": {"datePublished": "2026-08-20"},
+                    }],
                 },
             }},
         }
         item = site_news_observation(profile)
         self.assertEqual(item["signal_type"], "public_post")
+        self.assertEqual(item["published_at"], "2026-08-20")
         self.assertTrue(publishable_observation(item))
-        profile["evidence"]["website"]["value"]["pages"][0]["url"] = "https://example.test/contact"
-        self.assertIsNone(site_news_observation(profile))
+
+        # A page outside any news section is not activity.
+        off_section = copy.deepcopy(profile)
+        off_section["evidence"]["website"]["value"]["pages"][0]["url"] = "https://example.test/contact"
+        self.assertIsNone(site_news_observation(off_section))
+
+        # A parent/group site that merely mentions this company cannot supply it.
+        not_owned = copy.deepcopy(profile)
+        not_owned["evidence"]["website"]["value"]["identity_assessment"]["own_site_confirmed"] = False
+        self.assertIsNone(site_news_observation(not_owned))
+
+        # A modified timestamp is not a publication date.
+        modified_only = copy.deepcopy(profile)
+        modified_only["evidence"]["website"]["value"]["pages"][0]["date_candidates"] = {"dateModified": "2026-08-20"}
+        self.assertIsNone(site_news_observation(modified_only))
 
     def test_verified_observations_require_known_org_and_snapshot_hash(self):
         profiles = [{"organisation_number": "923609016", "name": "Example AS"}]
@@ -1329,6 +1353,153 @@ class VerifiedSiteSeedTests(unittest.TestCase):
             failed = subprocess.run(command, capture_output=True, text=True)
             self.assertNotEqual(failed.returncode, 0)
             self.assertIn("unknown organisations", failed.stderr)
+
+
+class AuditedOwnershipAndContentRules(unittest.TestCase):
+    """Covers the four failure modes raised in the organisers' audit."""
+
+    @staticmethod
+    def profile(name, org, *, title="", text="", domain="", structured=None, pages=None, social=None):
+        return {
+            "organisation_number": org,
+            "name": name,
+            "evidence": {"website": {
+                "status": "available",
+                "retrieved_at": "2026-10-26T00:00:00Z",
+                "source_url": f"https://{domain}/" if domain else "https://example.test/",
+                "value": {
+                    "final_url": f"https://{domain}/" if domain else "https://example.test/",
+                    "registered_domain": domain,
+                    "title": title,
+                    "main_text_excerpt": text,
+                    "structured_organisations": structured or [],
+                    "pages": pages or [],
+                    "discovered_social_links": social or [],
+                },
+            }},
+        }
+
+    def test_own_site_confirmed_by_org_number_and_by_domain_backed_name(self):
+        by_org = assess_website_identity(self.profile(
+            "HAVELEKTRO AS", "912345678", title="Havelektro", text="Org.nr 912 345 678. " + "x" * 120, domain="havelektro.no",
+        ))
+        self.assertTrue(by_org["own_site_confirmed"])
+        self.assertIn("organisation number", by_org["ownership_basis"])
+
+        by_domain = assess_website_identity(self.profile(
+            "HAVELEKTRO AS", "912345678", title="Havelektro", text="Velkommen til Havelektro. " + "x" * 120, domain="havelektro.no",
+        ))
+        self.assertTrue(by_domain["own_site_confirmed"])
+
+    def test_parent_group_site_is_not_accepted_as_the_subsidiary_own_site(self):
+        # The subsidiary's single name token appears, but the site is the
+        # group's: unrelated domain and a group legalName in structured data.
+        assessment = assess_website_identity(self.profile(
+            "NORDIC WIDGETS AS", "912345678",
+            title="Storkonsern Holding", text="Nordic er et av våre varemerker. " + "x" * 120,
+            domain="storkonsern.no", structured=[{"name": "Storkonsern Holding AS"}],
+        ))
+        self.assertFalse(assessment["own_site_confirmed"])
+        self.assertTrue(assessment["group_site_signals"])
+
+    def test_acronym_domain_counts_as_own_site_when_the_title_names_the_company(self):
+        # rs.no is genuinely Redningsselskapet's, and its title says so.
+        acronym = assess_website_identity(self.profile(
+            "REDNINGSSELSKAPET", "912345678",
+            title="Redningsselskapet Din stotte er viktig", text="x" * 120, domain="rs.no",
+        ))
+        self.assertTrue(acronym["own_site_confirmed"])
+        self.assertIn("titles itself", acronym["ownership_basis"])
+
+    def test_property_manager_site_is_not_the_housing_cooperative_own_site(self):
+        # The registry lists the manager's domain; its title is the manager's
+        # own name and never the co-op's, which is what separates the two.
+        manager = assess_website_identity(self.profile(
+            "HEIA BORETTSLAG", "912345678",
+            title="Boligbyggelag, forretningsforer og bolig", text="Vi forvalter borettslag. " + "x" * 120,
+            domain="usbl.no",
+        ))
+        self.assertFalse(manager["own_site_confirmed"])
+        self.assertTrue(manager["group_site_signals"])
+
+    def test_social_links_are_withheld_until_site_ownership_is_confirmed(self):
+        links = [{"platform": "facebook", "url": "https://facebook.com/nordicwidgets"}]
+        group = self.profile(
+            "NORDIC WIDGETS AS", "912345678", title="Storkonsern Holding",
+            text="Nordic er et av våre varemerker. " + "x" * 120, domain="storkonsern.no",
+            structured=[{"name": "Storkonsern Holding AS"}], social=links,
+        )
+        gated = apply_website_identity_gate(group, group["evidence"]["website"])
+        self.assertEqual(gated["website"]["value"]["social_links"], [])
+        self.assertEqual(gated["quarantined_social_links"], 1)
+
+    def test_vendor_share_widget_and_group_handles_are_rejected(self):
+        company = {"name": "HAVELEKTRO AS", "organisation_number": "912345678"}
+        for url, label in [
+            ("https://facebook.com/wixcom", "site builder account"),
+            ("https://facebook.com/sharer/sharer.php?u=https://havelektro.no", "share widget"),
+            ("https://facebook.com/", "platform root"),
+            ("https://x.com/intent/tweet?text=havelektro", "share intent"),
+        ]:
+            with self.subTest(label=label):
+                self.assertFalse(assess_social_identity(company, {"platform": "facebook", "url": url})["publishable"])
+        umbrella = assess_social_identity(company, {"platform": "facebook", "url": "https://facebook.com/havelektrogruppen"})
+        self.assertFalse(umbrella["publishable"])
+        self.assertIn("umbrella", umbrella["reason"])
+        good = assess_social_identity(company, {"platform": "facebook", "url": "https://facebook.com/havelektro"})
+        self.assertTrue(good["publishable"])
+
+    def test_news_requires_a_real_publication_date_not_a_modified_stamp(self):
+        article = {
+            "url": "https://havelektro.no/nyheter/ny-kontrakt-i-bergen",
+            "title": "Ny kontrakt i Bergen",
+            "content_sha256": "a" * 64,
+            "date_candidates": {"datePublished": "2026-03-04T09:00:00+01:00"},
+        }
+        accepted = validate_news_item(article)
+        self.assertTrue(accepted["publishable"], accepted["reasons"])
+        self.assertEqual(accepted["published_at"], "2026-03-04")
+
+        modified_only = validate_news_item({**article, "date_candidates": {"dateModified": "2026-03-04"}})
+        self.assertFalse(modified_only["publishable"])
+        self.assertTrue(modified_only["modified_only_date_rejected"])
+
+    def test_news_rejects_menu_labels_indexes_and_product_pages(self):
+        dated = {"datePublished": "2026-03-04"}
+        cases = {
+            "archive index": {"url": "https://havelektro.no/nyheter/", "title": "Nyheter", "date_candidates": dated},
+            "menu label": {"url": "https://havelektro.no/nyheter/se-mer", "title": "See more news", "date_candidates": dated},
+            "product page": {"url": "https://havelektro.no/produkter/kabel-123456", "title": "Kabel", "date_candidates": dated},
+        }
+        for label, page in cases.items():
+            with self.subTest(case=label):
+                self.assertFalse(validate_news_item(page)["publishable"])
+
+    def test_jobs_require_a_single_advert_for_this_company(self):
+        good = validate_job_ad(
+            {"url": "https://havelektro.no/karriere/elektriker-bergen-2026", "title": "Elektriker i Bergen"},
+            own_site_host="havelektro.no", company_name="HAVELEKTRO AS",
+        )
+        self.assertTrue(good["publishable"], good["reasons"])
+
+        landing = validate_job_ad(
+            {"url": "https://havelektro.no/karriere/", "title": "Karriere"},
+            own_site_host="havelektro.no", company_name="HAVELEKTRO AS",
+        )
+        self.assertFalse(landing["publishable"])
+
+        nav_search = validate_job_ad(
+            {"url": "https://arbeidsplassen.nav.no/stillinger?q=elektriker", "title": "Elektriker"},
+            own_site_host="havelektro.no", company_name="HAVELEKTRO AS",
+        )
+        self.assertFalse(nav_search["publishable"])
+
+        parent_ad = validate_job_ad(
+            {"url": "https://havelektro.no/karriere/elektriker-bergen-2026", "title": "Elektriker",
+             "employer_name": "Storkonsern Holding AS"},
+            own_site_host="havelektro.no", company_name="HAVELEKTRO AS",
+        )
+        self.assertFalse(parent_ad["publishable"])
 
 
 if __name__ == "__main__":

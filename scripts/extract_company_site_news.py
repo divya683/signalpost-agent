@@ -5,8 +5,13 @@ import argparse
 import hashlib
 import json
 import re
+import sys
 from pathlib import Path
 from urllib.parse import urlparse
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from norway_company_agent.content_rules import validate_news_item  # noqa: E402
 
 
 NEWS_PATH = re.compile(r"/(?:news|press|aktuelt|nyheter|artikler|blog)(?:/|$)", re.I)
@@ -18,23 +23,32 @@ def observation(profile: dict) -> dict | None:
     identity = value.get("identity_assessment") or {}
     if website.get("status") != "available" or not identity.get("publishable"):
         return None
+    # A news post is read out of the site body, so it speaks for whoever owns
+    # the site. A parent group's or shared brand site that merely mentions this
+    # company cannot supply its activity.
+    if not identity.get("own_site_confirmed"):
+        return None
     pages = [
         page for page in (value.get("pages") or [])
         if NEWS_PATH.search(urlparse(str(page.get("url") or "")).path)
     ]
     if not pages:
         return None
-    # Prefer an individual article over an archive page when the bounded crawl
-    # captured both. One observation is enough to prove site activity without
-    # rewarding a site for repeated navigation links.
-    pages.sort(key=lambda page: (-len([part for part in urlparse(str(page.get("url") or "")).path.split("/") if part]), str(page.get("url") or "")))
-    page = pages[0]
+    # Prefer a real dated article. Section indexes, navigation labels, product
+    # pages, and anything carrying only a modified timestamp are rejected
+    # outright rather than published as activity.
+    validated = [(page, validate_news_item(page)) for page in pages]
+    accepted = [(page, check) for page, check in validated if check["publishable"]]
+    if not accepted:
+        return None
+    accepted.sort(key=lambda item: (item[1]["published_at"] or "", str(item[0].get("url") or "")), reverse=True)
+    page, check = accepted[0]
     url = str(page.get("url") or "")
     digest = str(page.get("content_sha256") or "")
-    if not url.startswith(("http://", "https://")) or len(digest) != 64:
+    if len(digest) != 64:
         return None
     org = str(profile["organisation_number"])
-    title = str(page.get("title") or "Company news/activity page").strip()
+    title = str(page.get("title") or "").strip()
     return {
         "id": "company-site-news-" + hashlib.sha256(f"{org}|{url}".encode()).hexdigest()[:24],
         "organisation_number": org,
@@ -42,14 +56,23 @@ def observation(profile: dict) -> dict | None:
         "signal_type": "public_post",
         "source_url": url,
         "retrieved_at": website.get("retrieved_at"),
+        "published_at": check["published_at"],
         "content_sha256": digest,
         "exact_entity": True,
-        "identity_proof": [{"type": "website_identity_gate", "score": identity.get("score"), "method": identity.get("method")}],
+        "identity_proof": [
+            {"type": "website_identity_gate", "score": identity.get("score"), "method": identity.get("method")},
+            {"type": "site_ownership_confirmed", "value": identity.get("ownership_basis")},
+            {"type": "publication_date_basis", "value": check["date_basis"]},
+        ],
         "acquisition_mode": "permitted_public_page",
         "rights_status": "approved",
         "source_class": "company_site",
         "evidence_span": title[:1200],
-        "metrics": {"captured_news_pages": len(pages), "interpretation": "Company-owned activity; not independent sentiment."},
+        "metrics": {
+            "candidate_news_pages": len(pages),
+            "accepted_after_rules": len(accepted),
+            "interpretation": "Company-owned dated post; not independent sentiment.",
+        },
         "strategy": "company_site_activity",
     }
 
