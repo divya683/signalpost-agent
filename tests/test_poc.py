@@ -592,10 +592,11 @@ class CompletenessScoreTests(unittest.TestCase):
                 },
             }},
         }
-        item = site_news_observation(profile)
-        self.assertEqual(item["signal_type"], "public_post")
-        self.assertEqual(item["published_at"], "2026-08-20")
-        self.assertTrue(publishable_observation(item))
+        items = site_news_observation(profile)
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]["signal_type"], "public_post")
+        self.assertEqual(items[0]["published_at"], "2026-08-20")
+        self.assertTrue(publishable_observation(items[0]))
 
         # A page outside any news section is not activity.
         off_section = copy.deepcopy(profile)

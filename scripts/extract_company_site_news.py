@@ -42,13 +42,19 @@ def observation(profile: dict) -> dict | None:
     if not accepted:
         return None
     accepted.sort(key=lambda item: (item[1]["published_at"] or "", str(item[0].get("url") or "")), reverse=True)
-    page, check = accepted[0]
-    url = str(page.get("url") or "")
-    digest = str(page.get("content_sha256") or "")
-    if len(digest) != 64:
-        return None
     org = str(profile["organisation_number"])
-    title = str(page.get("title") or "").strip()
+    items = []
+    for page, check in accepted:
+        url = str(page.get("url") or "")
+        digest = str(page.get("content_sha256") or "")
+        if len(digest) != 64:
+            continue
+        title = str(page.get("title") or "").strip()
+        items.append(_item(org, url, digest, title, page, check, identity, website, len(pages), len(accepted)))
+    return items or None
+
+
+def _item(org, url, digest, title, page, check, identity, website, candidates, accepted_count) -> dict:
     return {
         "id": "company-site-news-" + hashlib.sha256(f"{org}|{url}".encode()).hexdigest()[:24],
         "organisation_number": org,
@@ -69,8 +75,8 @@ def observation(profile: dict) -> dict | None:
         "source_class": "company_site",
         "evidence_span": title[:1200],
         "metrics": {
-            "candidate_news_pages": len(pages),
-            "accepted_after_rules": len(accepted),
+            "candidate_news_pages": candidates,
+            "accepted_after_rules": accepted_count,
             "interpretation": "Company-owned dated post; not independent sentiment.",
         },
         "strategy": "company_site_activity",
@@ -84,12 +90,12 @@ def main() -> None:
     parser.add_argument("--report", required=True)
     args = parser.parse_args()
     profiles = [json.loads(line) for line in Path(args.profiles).read_text(encoding="utf-8").splitlines() if line.strip()]
-    rows = [item for profile in profiles if (item := observation(profile))]
+    rows = [item for profile in profiles for item in (observation(profile) or [])]
     Path(args.output).write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows), encoding="utf-8")
     report = {
-        "connector": "exact_company_site_news_activity_v1",
+        "connector": "company_site_dated_news_post_v1",
         "profiles": len(profiles),
-        "companies_with_activity": len(rows),
+        "companies_with_activity": len({row["organisation_number"] for row in rows}),
         "observations": len(rows),
         "claim_boundary": "Company-owned activity only; never treated as independent sentiment.",
     }
